@@ -1,0 +1,10 @@
+.env
+data/arkiv/
+data/logg/
+data/state.db*
+data/kameror.json
+.DS_Store
+__pycache__/
+
+# Internt, inte för publik konsumtion
+mejl-till-archive-org.md
