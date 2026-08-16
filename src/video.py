@@ -27,7 +27,7 @@ import subprocess
 KODEKAR = {
     "av1": ("libsvtav1", "32", ["-preset", "6"]),
     "h265": ("libx265", "30", ["-tag:v", "hvc1", "-x265-params", "log-level=error"]),
-    "h264": ("libx264", "34", ["-preset", "veryslow"]),
+    "h264": ("libx264", "34", ["-preset", "slow"]),
 }
 
 
