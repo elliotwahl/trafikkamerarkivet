@@ -70,9 +70,11 @@ MIN_LEDIGT_GB = float(os.environ.get("MIN_LEDIGT_GB", "5"))
 TAK_GB = float(os.environ.get("TAK_GB", "8"))
 VARNA_GB = float(os.environ.get("VARNA_GB", "5"))
 
-# Komprimering: kodek och kvalitet för dygnsvideorna. AV1 crf 32 mätt till
-# ~17 KB/ruta mot JPEG:ens 110 KB, utan synlig skillnad på en trafikbild.
-KODEK = os.environ.get("KODEK") or "av1"            # av1 | h265 | h264
+# Komprimering. H.264 är inte minst — AV1 är 40 % mindre vid samma kvalitet —
+# men det är det enda formatet som spelas upp av varje webbläsare och varje
+# enhet. Apple har ingen mjukvaruavkodare för AV1, så allt äldre än iPhone
+# 15 Pro hade stått utan arkiv. Lagringen är gratis; publiken är det inte.
+KODEK = os.environ.get("KODEK") or "h264"            # av1 | h265 | h264
 CRF = os.environ.get("CRF", "")                   # tom = kodekens standard
 
 # Trafikverket ber om att få veta vem som hämtar. Sätt KONTAKT till en

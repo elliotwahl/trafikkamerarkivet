@@ -1,13 +1,20 @@
 """Videokodning av bildrutor, och kontrollen av att den blev rätt.
 
-Uppmätt på 16 rutor från Essingeleden, 1280x720, 110 KB/ruta som JPEG:
+Uppmätt på 16 rutor från Essingeleden, 1280x720, 110 KB/ruta som JPEG.
+Kvalitetsmatchat, alla tre kring PSNR 39,6 och SSIM 0,963:
 
-    av1  crf 32 -> 15,6 KB/ruta   (7,0x mindre än JPEG)
-    av1  crf 40 -> 10,4 KB/ruta   (PSNR 38,0 / SSIM 0,952)
-    h265 crf 38 -> 13,2 KB/ruta   (PSNR 38,5 / SSIM 0,954)
+    av1  crf 32 -> 15,6 KB/ruta
+    h265 crf 36 -> 19,0 KB/ruta
+    h264 crf 34 -> 26,2 KB/ruta   <- standard
 
-Standardvalet är medvetet försiktigt. Vid 200 % förstoring är enda synliga
-skillnaden mot originalet att sensorbruset är borta.
+H.264 är störst av de tre och valt ändå. Apple har ingen mjukvaruavkodare
+för AV1, så varje iPhone äldre än 15 Pro hade stått utan arkiv, och H.265
+saknas i Firefox. H.264 spelas av allt som finns. Skillnaden är 1,7x på
+lagring som är gratis och obegränsad — priset för att låsa ute halva
+publiken är inte det.
+
+Vid 200 % förstoring är enda synliga skillnaden mot originalet att
+sensorbruset är borta.
 
 Antalet rutor per video spelar större roll än avståndet mellan dem: fyra
 rutor kostar 32 KB styck, sexton kostar 15,6, eftersom nyckelbilden delas av
@@ -20,7 +27,7 @@ import subprocess
 KODEKAR = {
     "av1": ("libsvtav1", "32", ["-preset", "6"]),
     "h265": ("libx265", "30", ["-tag:v", "hvc1", "-x265-params", "log-level=error"]),
-    "h264": ("libx264", "24", ["-preset", "slow"]),
+    "h264": ("libx264", "34", ["-preset", "veryslow"]),
 }
 
 

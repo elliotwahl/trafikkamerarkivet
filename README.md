@@ -27,7 +27,7 @@ Uppmätt 2026-08-15:
 
 | | antal aktiva | uppdateras | fullsize |
 |---|---|---|---|
-| Trafikflödeskameror | 785 | ~var 60:e sekund | 1280×720, ~125 KB |
+| Trafikflödeskameror | 786 | ~var 60:e sekund | 1280×720, ~125 KB |
 | Väglagskameror | 737 | ~var 5:e minut | ~2 MP, ~340 KB |
 
 Samma URL ger tre storlekar: `?type=fullsize` (1280×720), utan parameter
@@ -45,11 +45,11 @@ hämta än vad någon sajt visar.
 var 15:e minut                              var 6:e timme
 ┌────────────────┐                     ┌──────────────────────┐
 │ 1 API-anrop    │  PhotoTime för      │ periodens rutor       │
-│                │  alla kameror       │ per kamera → AV1      │
+│                │  alla kameror       │ per kamera → H.264    │
 └───────┬────────┘                     │ + register            │
         │ nya sedan sist?              └──────────┬───────────┘
 ┌───────▼────────┐                                │
-│ GET fullsize   │  785 bilder                    ▼
+│ GET fullsize   │  786 bilder                    ▼
 │ 8 parallella   │  96 MB på 19 s        archive.org
 └────────────────┘                        (ett item per dygn)
 ```
@@ -59,7 +59,7 @@ dedup-nyckeln: vi vet exakt vilka kameror som har en ny bild innan vi laddat ner
 en enda byte. Kameror som räknar upp tidsstämpeln men skickar identisk bild —
 frusen bild, "no signal" — fångas av en sha256-jämförelse och sparas inte igen.
 
-Ett fullt svep över alla 785 kameror tar 19 sekunder med 8 parallella
+Ett fullt svep över alla 786 kameror tar 19 sekunder med 8 parallella
 anslutningar, vilket är ungefär en förfrågan i sekunden i snitt. Ingen
 rate limiting har observerats.
 
@@ -96,18 +96,23 @@ En trafikkamera står still. Bakgrunden är identisk från ruta till ruta och ba
 bilarna rör sig, vilket är precis vad en videokodek utnyttjar och vad en
 stillbildskodek inte kan. Uppmätt på 16 rutor från Essingeleden, 1280×720:
 
-| | KB/ruta | mot JPEG | PSNR | SSIM |
-|---|---|---|---|---|
-| JPEG, som Trafikverket levererar | 110 | — | — | — |
-| AVIF q50, ruta för ruta | 60,0 | 1,8× | — | — |
-| H.264 crf 26 | 75,8 | 1,4× | — | — |
-| H.265 crf 38 | 13,2 | 8,2× | 38,5 | 0,954 |
-| **AV1 crf 32** *(standard)* | **15,6** | **7,0×** | — | — |
-| AV1 crf 40 | 10,4 | 10,4× | 38,0 | 0,952 |
-| AV1 crf 45 | 7,8 | 13,9× | 37,0 | 0,944 |
+Kvalitetsmatchat, alla kring PSNR 39,6 och SSIM 0,963:
 
-Standardvalet är medvetet försiktigt: vid 200 % förstoring är enda synliga
-skillnaden mot originalet att sensorbruset är borta.
+| | KB/ruta | mot JPEG | spelas upp av |
+|---|---|---|---|
+| JPEG, som Trafikverket levererar | 110 | — | allt |
+| AVIF q50, ruta för ruta | 60,0 | 1,8× | de flesta |
+| AV1 crf 32 | 15,6 | 7,0× | allt utom Apple äldre än iPhone 15 Pro |
+| H.265 crf 36 | 19,0 | 5,8× | Apple och Chrome, inte Firefox |
+| **H.264 crf 34** *(standard)* | **26,2** | **4,2×** | **allt. Varje webbläsare, varje enhet** |
+
+AV1 är 40 % mindre vid samma kvalitet och valdes ändå bort. Apple har ingen
+mjukvaruavkodare för AV1, så varje iPhone äldre än 15 Pro hade stått utan
+arkiv, och H.265 saknas i Firefox. Arkivet ska gå att öppna om tio år på
+vad som helst — lagringen är gratis, och det är inte publiken.
+
+Vid 200 % förstoring är enda synliga skillnaden mot originalet att
+sensorbruset är borta.
 
 Två saker som visade sig spela roll, och en som inte gjorde det:
 
@@ -171,7 +176,7 @@ Allt styrs med miljövariabler.
 | `LAN` | alla | länsnummer, t.ex. `1` för Stockholm, `1,14` med Västra Götaland |
 | `VARIANT` | `fullsize` | `fullsize` · `medium` · `thumbnail` |
 | `PARALLELLA` | `8` | samtidiga nedladdningar |
-| `KODEK` / `CRF` | `av1` / `32` | `av1` · `h265` · `h264` |
+| `KODEK` / `CRF` | `h264` / `34` | `h264` · `h265` · `av1` |
 | `TAK_GB` | `8` | svepet slutar skriva över det här — gratisnivån är 10 GB |
 | `VARNA_GB` | `5` | larma när bufferten passerar |
 | `TRV_NYCKEL` | `demokey` | egen nyckel om demokey stryps |
