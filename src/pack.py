@@ -25,6 +25,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 

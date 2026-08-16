@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import os
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -89,15 +90,37 @@ def _signera(metod, vag, query, kropp, extra_headers=None):
     return url, headers
 
 
-def _begar(metod, vag, query=None, kropp=None, extra_headers=None, timeout=120):
-    url, headers = _signera(metod, vag, query, kropp, extra_headers)
-    req = urllib.request.Request(url, data=kropp, method=metod)
-    for k, v in headers.items():
-        if k != "host":  # urllib sätter Host själv
-            req.add_header(k, v)
-    req.add_header("User-Agent", config.UA)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.status, r.read()
+def _begar(metod, vag, query=None, kropp=None, extra_headers=None,
+           timeout=600, forsok=4):
+    """Ett anrop mot R2, med omförsök.
+
+    Tar-filerna är över hundra megabyte styck, och en enda nätverkshicka mitt
+    i en sådan nedladdning fällde tidigare en hel sextimmarsperiod. Signaturen
+    måste räknas om för varje försök eftersom den innehåller en tidsstämpel.
+
+    404 kastas vidare direkt — det är ett svar, inte ett fel att försöka om.
+    """
+    sista = None
+    for n in range(forsok):
+        if n:
+            time.sleep(2 ** n)
+        # Signaturen är tidsstämplad och går inte att återanvända.
+        url, headers = _signera(metod, vag, query, kropp, extra_headers)
+        req = urllib.request.Request(url, data=kropp, method=metod)
+        for k, v in headers.items():
+            if k != "host":  # urllib sätter Host själv
+                req.add_header(k, v)
+        req.add_header("User-Agent", config.UA)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.status, r.read()
+        except urllib.error.HTTPError as e:
+            if e.code in (404, 412):
+                raise
+            sista = e
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            sista = e
+    raise sista
 
 
 def _vag(nyckel=""):
