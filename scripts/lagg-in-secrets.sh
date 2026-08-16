@@ -31,7 +31,9 @@ for nyckel in $NYCKLAR; do
     hoppade+=("$nyckel")
     continue
   fi
-  printf '%s' "$varde" | gh secret set "$nyckel" --body-file - >/dev/null
+  # gh läser värdet från stdin när --body utelämnas, vilket håller
+  # hemligheterna borta från processlistan.
+  printf '%s' "$varde" | gh secret set "$nyckel" >/dev/null
   echo "  satt $nyckel"
   ((satta++)) || true
 done
