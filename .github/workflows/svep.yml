@@ -1,0 +1,39 @@
+name: Svep
+
+# Var 15:e minut. GitHubs schema glider och hoppar ibland över helt, därför
+# kan vakten också trigga jobbet via workflow_dispatch. Att sveparna blir
+# ojämnt fördelade gör inget: vi sparar Trafikverkets egen PhotoTime, inte
+# när vi råkade fråga.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# Två svep samtidigt skulle hämta samma bilder två gånger. Köa i stället för
+# att avbryta — ett svep som redan börjat ska få bli klart.
+concurrency:
+  group: svep
+  cancel-in-progress: false
+
+jobs:
+  svep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Hämta nya kamerabilder till bufferten
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          KONTAKT: ${{ secrets.KONTAKT }}
+          TRV_NYCKEL: ${{ secrets.TRV_NYCKEL }}
+        run: python3 src/sweep.py

@@ -180,17 +180,23 @@ Ingenting lagras på en maskin som finns kvar efteråt. Svepet kör på en
 efemär runner, bufferten ligger i objektlager, arkivet på archive.org.
 
 ```
-var 15:e minut          var 6:e timme            en gång om dygnet
-GitHub Actions          GitHub Actions           GitHub Actions
-   svep.py       ──▶      pack.py         ──▶      status.py
-      │                     │  ▲                      │
-      ▼                     ▼  │ töms först när        ▼
-  R2-buffert ───────────────┘  │ IA bekräftat      STATUS.md
-  (tar per svep)               └── archive.org      (commit)
+var 15:e minut         var 6:e timme, två faser        en gång om dygnet
+  svep.py                     pack.py                     status.py
+     │                    ┌──────┴──────┐                     │
+     ▼                    ▼             ▼                     ▼
+  ra/  ────────────▶  klart/  ────────────▶  archive.org   STATUS.md
+  råa rutor           videor                                (commit)
+  9,4 GB/dygn         1,2 GB/dygn
 ```
 
-Allt tillstånd — vad som redan hämtats, när senaste svepet gick, hur mycket
-som väntar på komprimering — lever i bufferten, inte på runnern.
+Allt tillstånd — vad som redan hämtats, när senaste svepet gick, vad som
+väntar — lever i bufferten, inte på runnern.
+
+De två faserna är medvetet frikopplade. Komprimeringen kör även när
+archive.org inte svarar, och eftersom ett komprimerat dygn är en åttondel av
+ett rått räcker gratisnivåns 10 GB då i **åtta dygn** i stället för ett. Att
+låta komprimeringen vänta på en extern tjänst hade gjort den tjänsten till en
+enskild felkälla för hela arkivet.
 
 ### Vad som händer när något går sönder
 

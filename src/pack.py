@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Packar bufferten till dygnsitems på archive.org.
+"""Komprimerar bufferten och laddar upp till archive.org — i den ordningen,
+men oberoende av varandra.
 
-Kör var sjätte timme. Tar varje *avslutad* sextimmarsperiod som fortfarande
-ligger kvar i bufferten, komprimerar den per kamera till AV1 och laddar upp.
+Två faser som inte får blockera varandra:
 
-Att den letar efter allt som ligger kvar, i stället för att räkna ut vilken
-period som är "nästa", gör den självläkande: en missad körning tas igen av sig
-själv, och en halvfärdig körning gör bara om det som inte hann bli klart.
+    1. komprimera   ra/ (råa rutor)  ->  klart/ (färdiga videor)
+    2. ladda upp    klart/           ->  archive.org
 
-Bufferten töms först när archive.org självt räknar upp filerna i sitt
-metadata-API. Går verifieringen inte att genomföra ligger råmaterialet kvar.
+Poängen med att skilja dem åt är marginalen. Råa rutor är 9,4 GB per dygn,
+komprimerade är samma dygn 1,2 GB. Om fas 2 ligger nere — archive.org strypte
+oss, deras kö är lång, nätverket är trasigt — fortsätter fas 1 ändå, och
+bufferten räcker då i åtta dygn i stället för ett.
+
+Fas 1 raderar råmaterialet först när videorna ligger i bufferten.
+Fas 2 raderar videorna först när archive.org självt räknar upp dem.
+Ingen av dem raderar något på ett antagande.
 """
 
 import collections
@@ -33,9 +38,12 @@ import larm
 import r2
 
 RA = "ra"
+KLART = "klart"
 STATUS = "status/senaste-packning.json"
 PERIODER = (0, 6, 12, 18)
 
+
+# ---------------------------------------------------------------- fas 1
 
 def perioder_i_bufferten():
     """{(dygn, period): [nycklar]} för allt råmaterial som ligger kvar."""
@@ -49,14 +57,14 @@ def perioder_i_bufferten():
             timme = int(fil[:2])
         except ValueError:
             continue
-        period = max(p for p in PERIODER if p <= timme)
-        grupper[(dygn, period)].append(nyckel)
+        grupper[(dygn, max(p for p in PERIODER if p <= timme))].append(nyckel)
     return grupper
 
 
 def avslutad(dygn, period, nu):
     """En period är klar när dess sista kvart har passerat."""
-    start = datetime.strptime(dygn, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(hours=period)
+    start = (datetime.strptime(dygn, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+             + timedelta(hours=period))
     return nu >= start + timedelta(hours=6)
 
 
@@ -70,7 +78,6 @@ def packa_upp(nycklar, katalog):
             continue
         with tarfile.open(fileobj=io.BytesIO(rå), mode="r") as tar:
             tar.extractall(katalog, filter="data")
-        # Registret bredvid taren har tidsstämplar och kontrollsummor
         reg = r2.las(nyckel.replace(".tar", ".json"))
         if reg:
             for r in json.loads(reg):
@@ -82,14 +89,14 @@ def packa_upp(nycklar, katalog):
 
 def koda(katalog, kamera, rader, ut):
     """Rutorna för en kamera till en AV1-video. Returnerar antal rutor."""
-    lista = katalog / f".{kamera}.txt"
     filer = [katalog / r["fil"] for r in rader]
     filer = [f for f in filer if f.exists()]
     if len(filer) < 2:
         return 0
+    lista = katalog / ".rutor.txt"
     lista.write_text("".join(f"file '{f}'\nduration 1\n" for f in filer), encoding="utf-8")
     encoder, crf_standard, extra = compact.KODEKAR[config.KODEK]
-    cmd = [
+    kord = subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error",
         "-f", "concat", "-safe", "0", "-i", str(lista),
         "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,"
@@ -97,22 +104,21 @@ def koda(katalog, kamera, rader, ut):
         "-c:v", encoder, "-crf", config.CRF or crf_standard,
         "-pix_fmt", "yuv420p", "-r", "1", "-movflags", "+faststart",
         *extra, str(ut),
-    ]
-    kord = subprocess.run(cmd, capture_output=True, text=True)
+    ], capture_output=True, text=True)
     lista.unlink(missing_ok=True)
     if kord.returncode != 0:
         print(f"  ! {kamera}: ffmpeg: {kord.stderr.strip()[:200]}")
         return 0
     # Lita aldrig på att videon blev rätt — räkna rutorna i den.
     if compact.ffprobe_antal(ut) != len(filer):
-        print(f"  ! {kamera}: fel antal rutor i videon, hoppar över")
+        print(f"  ! {kamera}: fel antal rutor i videon, behåller råmaterialet")
         ut.unlink(missing_ok=True)
         return 0
     return len(filer)
 
 
-def packa_period(dygn, period, nycklar, kameraregister, nu):
-    print(f"\n{dygn} kl {period:02d}–{period+6:02d}: {len(nycklar)} svep i bufferten")
+def komprimera_period(dygn, period, nycklar, kameraregister):
+    print(f"\n{dygn} kl {period:02d}–{period+6:02d}: {len(nycklar)} svep")
     arbete = Path(tempfile.mkdtemp(prefix="tkark-"))
     try:
         rutor = packa_upp(nycklar, arbete)
@@ -120,28 +126,16 @@ def packa_period(dygn, period, nycklar, kameraregister, nu):
             print("  inget råmaterial, hoppar över")
             return False
 
-        redan = ia.filer_i_item(dygn) or set()
-        skapa_item = not redan
-        antal_kameror = 0
-        antal_rutor = 0
-        bytes_upp = 0
         index = {}
-
+        kameror = rutor_totalt = bytes_ut = 0
         for kamera, rader in sorted(rutor.items()):
             filnamn = f"{kamera}-{period:02d}.mp4"
-            if filnamn in redan:
-                continue
             ut = arbete / filnamn
             n = koda(arbete, kamera, rader, ut)
             if not n:
                 continue
-            try:
-                _, storlek = ia.ladda_upp(dygn, filnamn, ut, skapa_item=skapa_item,
-                                          antal_kameror=len(rutor))
-                skapa_item = False
-            except Exception as e:  # noqa: BLE001
-                print(f"  ! {filnamn}: {e}")
-                continue
+            data = ut.read_bytes()
+            r2.skriv(f"{KLART}/{dygn}/{filnamn}", data, "video/mp4")
             meta = kameraregister.get(kamera, {})
             index[kamera] = {
                 "namn": meta.get("Name"),
@@ -153,72 +147,134 @@ def packa_period(dygn, period, nycklar, kameraregister, nu):
                 "rutor": [{"i": i, "t": r["t"], "b": r["b"], "sha256": r["sha256"]}
                           for i, r in enumerate(rader) if (arbete / r["fil"]).exists()],
             }
-            antal_kameror += 1
-            antal_rutor += n
-            bytes_upp += storlek
+            kameror += 1
+            rutor_totalt += n
+            bytes_ut += len(data)
             ut.unlink(missing_ok=True)
 
-        if index:
-            ia.ladda_upp(dygn, f"index-{period:02d}.json",
-                         json.dumps({"dygn": dygn, "period": period,
-                                     "källa": "Trafikverkets öppna API (CC0)",
-                                     "kameror": index}, ensure_ascii=False).encode("utf-8"))
-
-        # Verifiera mot archive.org innan bufferten töms.
-        uppe = ia.filer_i_item(dygn)
-        forvantat = {f"{k}-{period:02d}.mp4" for k in index} | {f"index-{period:02d}.json"}
-        if uppe is None or not forvantat <= uppe:
-            saknas = len(forvantat - (uppe or set()))
-            print(f"  ! {saknas} filer kunde inte verifieras hos archive.org — "
-                  f"behåller bufferten, nästa körning gör om")
+        if not index:
+            print("  inga kameror gick att koda, behåller råmaterialet")
             return False
 
+        r2.skriv(f"{KLART}/{dygn}/index-{period:02d}.json",
+                 json.dumps({"dygn": dygn, "period": period,
+                             "källa": "Trafikverkets öppna API (CC0)",
+                             "kameror": index}, ensure_ascii=False),
+                 "application/json")
+
+        # Råmaterialet raderas först när videorna faktiskt ligger i bufferten.
+        saknas = [k for k in index if not r2.finns(f"{KLART}/{dygn}/{k}-{period:02d}.mp4")]
+        if saknas:
+            print(f"  ! {len(saknas)} videor kom inte fram till bufferten, "
+                  f"behåller råmaterialet")
+            return False
         for nyckel in nycklar:
             r2.radera(nyckel)
             r2.radera(nyckel.replace(".tar", ".json"))
 
-        print(f"  {antal_kameror} kameror, {antal_rutor} rutor, "
-              f"{bytes_upp/1e6:.0f} MB till archive.org, buffert tömd")
+        print(f"  {kameror} kameror, {rutor_totalt} rutor -> {bytes_ut/1e6:.0f} MB "
+              f"({bytes_ut/max(rutor_totalt,1)/1024:.1f} KB/ruta), råmaterialet rensat")
         return True
     finally:
         shutil.rmtree(arbete, ignore_errors=True)
 
 
+# ---------------------------------------------------------------- fas 2
+
+def ladda_upp_klart():
+    """Allt som ligger färdigkomprimerat skickas till archive.org.
+
+    Går det inte ligger det kvar och nästa körning tar det. Ett dygn
+    komprimerat är 1,2 GB, så bufferten tål ungefär åtta dygns avbrott.
+    """
+    per_dygn = collections.defaultdict(list)
+    for nyckel in r2.lista(f"{KLART}/"):
+        delar = nyckel.split("/")
+        if len(delar) == 3:
+            per_dygn[delar[1]].append(nyckel)
+    if not per_dygn:
+        return 0, 0
+
+    uppladdade = kvar = 0
+    for dygn in sorted(per_dygn):
+        nycklar = sorted(per_dygn[dygn])
+        redan = ia.filer_i_item(dygn)
+        if redan is None:
+            print(f"  {dygn}: archive.org svarar inte, låter det ligga")
+            kvar += len(nycklar)
+            continue
+        skapa_item = not redan
+        print(f"\n{dygn}: {len(nycklar)} filer att ladda upp")
+
+        for nyckel in nycklar:
+            filnamn = nyckel.split("/")[-1]
+            if filnamn in redan:
+                r2.radera(nyckel)
+                continue
+            data = r2.las(nyckel)
+            if data is None:
+                continue
+            try:
+                ia.ladda_upp(dygn, filnamn, data, skapa_item=skapa_item,
+                             antal_kameror=len(nycklar) // 2)
+                skapa_item = False
+                uppladdade += 1
+            except Exception as e:  # noqa: BLE001 — nästa körning tar resten
+                print(f"  ! {filnamn}: {str(e)[:140]}")
+                kvar += 1
+                break  # strypt eller nere — sluta banka på
+
+        # Radera bara det archive.org självt räknar upp.
+        uppe = ia.filer_i_item(dygn)
+        if uppe:
+            for nyckel in nycklar:
+                if nyckel.split("/")[-1] in uppe:
+                    r2.radera(nyckel)
+    return uppladdade, kvar
+
+
+# ---------------------------------------------------------------- körning
+
 def main(argv):
     nu = datetime.now(timezone.utc)
-    tvinga = "--tvinga" in argv  # packa även perioder som inte hunnit ta slut
+    tvinga = "--tvinga" in argv       # packa även perioder som inte tagit slut
+    bara_upp = "--bara-upp" in argv   # hoppa över komprimeringen
 
     rå = r2.las("status/kameror.json")
-    kameraregister = {}
-    if rå:
-        kameraregister = {k["Id"]: k for k in json.loads(rå)["kameror"]}
+    kameraregister = {k["Id"]: k for k in json.loads(rå)["kameror"]} if rå else {}
 
-    grupper = perioder_i_bufferten()
-    att_gora = sorted(g for g in grupper if tvinga or avslutad(*g, nu))
-    if not att_gora:
-        print("inget avslutat att packa")
-        return 0
-
-    print(f"{len(att_gora)} period(er) att packa")
     klara = misslyckade = 0
-    for dygn, period in att_gora:
-        try:
-            if packa_period(dygn, period, grupper[(dygn, period)], kameraregister, nu):
-                klara += 1
-            else:
+    if not bara_upp:
+        grupper = perioder_i_bufferten()
+        att_gora = sorted(g for g in grupper if tvinga or avslutad(*g, nu))
+        print(f"fas 1: {len(att_gora)} period(er) att komprimera")
+        for dygn, period in att_gora:
+            try:
+                if komprimera_period(dygn, period, grupper[(dygn, period)], kameraregister):
+                    klara += 1
+                else:
+                    misslyckade += 1
+            except Exception as e:  # noqa: BLE001 — en period ska inte fälla resten
+                print(f"  ! {dygn} kl {period:02d}: {type(e).__name__}: {e}")
                 misslyckade += 1
-        except Exception as e:  # noqa: BLE001 — en period ska inte fälla resten
-            print(f"  ! {dygn} kl {period:02d}: {type(e).__name__}: {e}")
-            misslyckade += 1
-        time.sleep(1)
 
+    print("\nfas 2: laddar upp till archive.org")
+    uppladdade, kvar = ladda_upp_klart()
+    print(f"  {uppladdade} filer uppladdade, {kvar} kvar i bufferten")
+
+    _, byte = r2.anvandning()
     r2.skriv(STATUS, json.dumps({
         "ts": nu.isoformat(), "klara": klara, "misslyckade": misslyckade,
+        "uppladdade": uppladdade, "kvar": kvar,
+        "buffert_gb": round(byte / 1e9, 2),
     }, ensure_ascii=False), "application/json")
 
     if misslyckade:
-        larm.skicka(f"⚠️ {misslyckade} period(er) kunde inte packas. "
-                    f"Råmaterialet ligger kvar i bufferten.")
+        larm.skicka(f"⚠️ {misslyckade} period(er) kunde inte komprimeras. "
+                    f"Råmaterialet ligger kvar.")
+    if kvar and byte / 1e9 > 5:
+        larm.skicka(f"⚠️ {kvar} filer väntar på archive.org och bufferten är "
+                    f"uppe i {byte/1e9:.1f} GB av gratisnivåns 10.")
     return 1 if misslyckade and not klara else 0
 
 

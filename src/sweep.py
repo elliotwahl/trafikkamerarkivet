@@ -120,7 +120,10 @@ def svep():
              json.dumps(rader, ensure_ascii=False), "application/json")
     r2.skriv(STATE, json.dumps(tidigare, ensure_ascii=False), "application/json")
 
-    antal, byte = r2.anvandning(f"{RA}/")
+    # Hela bucketen, inte bara råmaterialet: efter komprimeringen ligger
+    # färdiga videor kvar under klart/ tills archive.org tagit emot dem, och
+    # det är summan som ska hållas under gratisnivåns 10 GB.
+    antal, byte = r2.anvandning()
     sekunder = time.time() - t0
     hjartslag = {
         "ts": nu.isoformat(), "kameror": len(kameror), "nya": len(nya),
@@ -134,12 +137,14 @@ def svep():
           f"{dubbletter} dubbletter, {fel} fel, {storlek/1e6:.0f} MB på "
           f"{sekunder:.0f} s (buffert {byte/1e9:.2f} GB i {antal} objekt)")
 
-    # Bufferten ska tömmas var sjätte timme. Växer den ändå har komprimeringen
-    # slutat fungera, och då är det bråttom innan gratisnivån tar slut.
+    # Bufferten ska tömmas var sjätte timme. Växer den ändå har antingen
+    # komprimeringen eller uppladdningen slutat fungera, och då är det bråttom
+    # innan gratisnivån tar slut.
     if byte / 1e9 > BUFFERT_VARNING_GB:
         larm.skicka(
             f"⚠️ Bufferten är uppe i {byte/1e9:.1f} GB i {antal} objekt. "
-            f"R2:s gratisnivå är 10 GB — komprimeringen har troligen slutat köra."
+            f"R2:s gratisnivå är 10 GB — komprimeringen eller uppladdningen "
+            f"har slutat köra."
         )
     if fel > len(nya) * 0.2 and len(nya) > 20:
         larm.skicka(f"⚠️ {fel} av {len(nya)} kameror gick inte att hämta i svepet.")

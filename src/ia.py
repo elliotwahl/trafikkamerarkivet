@@ -66,9 +66,14 @@ def _meta(varde):
     return varde if varde.isascii() else "uri(" + urllib.parse.quote(varde, safe="") + ")"
 
 
-def _begar(metod, url, data=None, headers=None, forsok=5, timeout=300):
+def _begar(metod, url, data=None, headers=None, forsok=2, timeout=300):
     """IA svarar 503 SlowDown när kön är lång eller när kontot går för fort.
-    Backa av och försök igen — ett arkiv har inte bråttom."""
+
+    Ett försök till efter en minut, sedan ger vi upp. Att banka vidare är
+    precis det som utlöser deras spamskydd, och materialet ligger kvar i
+    bufferten — nästa körning om sex timmar tar det. Ett arkiv har inte
+    bråttom, men det ska heller inte göra sig ovälkommet.
+    """
     for n in range(forsok):
         req = urllib.request.Request(url, data=data, method=metod)
         req.add_header("Authorization", _auth())
