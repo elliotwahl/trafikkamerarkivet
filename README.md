@@ -174,11 +174,40 @@ längre innehåller personuppgifter. De reserverar sig för att enstaka undantag
 kan förekomma. Hör av dig om du hittar en bild som identifierar någon, så
 plockas den bort.
 
+## Så körs det i drift
+
+Ingenting lagras på en maskin som finns kvar efteråt. Svepet kör på en
+efemär runner, bufferten ligger i objektlager, arkivet på archive.org.
+
+```
+var 15:e minut          var 6:e timme            en gång om dygnet
+GitHub Actions          GitHub Actions           GitHub Actions
+   svep.py       ──▶      pack.py         ──▶      status.py
+      │                     │  ▲                      │
+      ▼                     ▼  │ töms först när        ▼
+  R2-buffert ───────────────┘  │ IA bekräftat      STATUS.md
+  (tar per svep)               └── archive.org      (commit)
+```
+
+Allt tillstånd — vad som redan hämtats, när senaste svepet gick, hur mycket
+som väntar på komprimering — lever i bufferten, inte på runnern.
+
+### Vad som händer när något går sönder
+
+| fel | hur det upptäcks |
+|---|---|
+| Ett svep hoppas över | Nästa svep tar den färskaste bilden. Inget larm — det kostar en bildruta. |
+| Packningen slutar köra | Bufferten slutar tömmas, och svepet larmar när den passerar 6 GB av gratisnivåns 10. |
+| En uppladdning misslyckas | Bufferten behålls, nästa packning gör om den. Perioder söks upp genom att de ligger kvar, inte genom att räknas ut — en missad körning tas igen av sig själv. |
+| En video blev fel | `ffprobe` räknar rutorna i den färdiga filen. Stämmer inte antalet raderas inget. |
+| Trafikverket svarar tomt | Tre försök. Ett tomt svar får aldrig tolkas som "det finns inga kameror". |
+| **Hela insamlingen tystnar** | Ett jobb som inte kör kan inte larma om sig självt. Därför pingar svepet en extern dödmansknapp (`HJARTSLAG_URL`) — uteblir pingen larmar den tjänsten. |
+| GitHub stänger av schemat | `status.py` committar en gång om dygnet, vilket håller repot aktivt. |
+
 ## Status
 
-Insamling, komprimering och uppladdning fungerar. Kvar att koppla ihop:
-schemaläggning via GitHub Actions, mellanlagring i objektlager i stället för
-lokal disk, samt bevakning som larmar om insamlingen tystnar.
+Se [STATUS.md](STATUS.md) för vad arkivet innehåller och när det senast
+hämtade något.
 
 ## Licens
 

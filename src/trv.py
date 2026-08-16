@@ -9,6 +9,7 @@ Två anrop räcker för hela arkivet:
 
 import gzip
 import json
+import time
 import urllib.error
 import urllib.request
 
@@ -43,32 +44,50 @@ def _query(falt, typer):
     )
 
 
-def kameror(latt=True, typer=None):
-    """Hämtar kameralistan. Kastar om API:t svarar med fel eller trunkerar."""
+def kameror(latt=True, typer=None, forsok=3):
+    """Hämtar kameralistan. Kastar om API:t svarar med fel eller trunkerar.
+
+    Trafikverket returnerar då och då ett tomt svar utan att flagga fel. Ett
+    tomt svar får aldrig tolkas som "det finns inga kameror" — då hade svepet
+    tyst arkiverat ingenting — men det är inte heller värt att offra ett svep
+    för, så vi försöker om ett par gånger först.
+    """
     typer = typer or config.TYPER
     body = _query(FALT_LATT if latt else FALT_FULL, typer).encode("utf-8")
-    req = urllib.request.Request(
-        config.TRV_URL,
-        data=body,
-        headers={"Content-Type": "text/xml", "User-Agent": config.UA,
-                 "Accept-Encoding": "gzip"},
-    )
-    with urllib.request.urlopen(req, timeout=config.TIMEOUT) as r:
-        rå = r.read()
-        if r.headers.get("Content-Encoding") == "gzip":
-            rå = gzip.decompress(rå)
-    svar = json.loads(rå)["RESPONSE"]["RESULT"][0]
+    sista_fel = None
 
-    fel = svar.get("ERROR")
-    if fel:
-        # "Maximum response size is reached" betyder att listan är avhuggen —
-        # då saknas kameror tyst, och det vill vi inte upptäcka om ett halvår.
-        raise RuntimeError(f"Trafikverket svarade med fel: {fel}")
+    for n in range(forsok):
+        if n:
+            time.sleep(3 * n)
+        try:
+            req = urllib.request.Request(
+                config.TRV_URL,
+                data=body,
+                headers={"Content-Type": "text/xml", "User-Agent": config.UA,
+                         "Accept-Encoding": "gzip"},
+            )
+            with urllib.request.urlopen(req, timeout=config.TIMEOUT) as r:
+                rå = r.read()
+                if r.headers.get("Content-Encoding") == "gzip":
+                    rå = gzip.decompress(rå)
+            svar = json.loads(rå)["RESPONSE"]["RESULT"][0]
+        except (urllib.error.URLError, TimeoutError, OSError,
+                json.JSONDecodeError, KeyError, IndexError) as e:
+            sista_fel = f"{type(e).__name__}: {e}"
+            continue
 
-    lista = svar.get("Camera") or []
-    if not lista:
-        raise RuntimeError("Trafikverket returnerade noll kameror")
-    return lista
+        fel = svar.get("ERROR")
+        if fel:
+            # "Maximum response size is reached" betyder att listan är avhuggen —
+            # då saknas kameror tyst, och det vill vi inte upptäcka om ett halvår.
+            raise RuntimeError(f"Trafikverket svarade med fel: {fel}")
+
+        lista = svar.get("Camera") or []
+        if lista:
+            return lista
+        sista_fel = "tomt svar"
+
+    raise RuntimeError(f"Trafikverket gav ingen kameralista på {forsok} försök ({sista_fel})")
 
 
 def bild_url(photo_url, variant=None):
