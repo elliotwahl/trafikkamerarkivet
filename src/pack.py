@@ -117,7 +117,19 @@ def komprimera_period(dygn, period, nycklar, kameraregister):
                 continue
             data = ut.read_bytes()
             r2.skriv(f"{KLART}/{dygn}/{filnamn}", data, "video/mp4")
+
+            # Rutlistan ligger per kamera, inte samlad. En viewer som vill visa
+            # en kamera ska hämta en liten fil — inte 7 MB rutor för 786 andra.
+            rutor_ut = [{"i": i, "t": r["t"], "b": r["b"], "sha256": r["sha256"]}
+                        for i, r in enumerate(rader) if (arbete / r["fil"]).exists()]
+            r2.skriv(f"{KLART}/{dygn}/{kamera}-{period:02d}.json",
+                     json.dumps({"kamera": kamera, "dygn": dygn, "period": period,
+                                 "video": filnamn, "fps": 1, "rutor": rutor_ut},
+                                ensure_ascii=False),
+                     "application/json")
+
             meta = kameraregister.get(kamera, {})
+            # Periodens index är bara vilka kameror som finns och var de står.
             index[kamera] = {
                 "namn": meta.get("Name"),
                 "beskrivning": meta.get("Description"),
@@ -125,8 +137,9 @@ def komprimera_period(dygn, period, nycklar, kameraregister):
                 "riktning": meta.get("Direction"),
                 "wgs84": (meta.get("Geometry") or {}).get("WGS84"),
                 "video": filnamn,
-                "rutor": [{"i": i, "t": r["t"], "b": r["b"], "sha256": r["sha256"]}
-                          for i, r in enumerate(rader) if (arbete / r["fil"]).exists()],
+                "antal_rutor": len(rutor_ut),
+                "forsta": rutor_ut[0]["t"] if rutor_ut else None,
+                "sista": rutor_ut[-1]["t"] if rutor_ut else None,
             }
             kameror += 1
             rutor_totalt += n
@@ -197,7 +210,7 @@ def ladda_upp_klart():
                 continue
             try:
                 ia.ladda_upp(dygn, filnamn, data, skapa_item=skapa_item,
-                             antal_kameror=len(nycklar) // 2)
+                             antal_kameror=len(nycklar) // 3)
                 skapa_item = False
                 uppladdade += 1
             except Exception as e:  # noqa: BLE001 — nästa körning tar resten
