@@ -26,7 +26,9 @@ NYCKLAR=(
 satta=0
 hoppade=()
 for nyckel in $NYCKLAR; do
-  varde=$(grep -E "^${nyckel}=" .env | head -1 | cut -d= -f2-)
+  # Trimma blanksteg: ett inledande mellanslag i en token blir en
+  # kontrolltecken-krasch långt senare, i ett helt annat sammanhang.
+  varde=$(grep -E "^${nyckel}=" .env | head -1 | cut -d= -f2- | sed -E "s/^[[:space:]]+//; s/[[:space:]]+$//")
   if [[ -z "$varde" ]]; then
     hoppade+=("$nyckel")
     continue

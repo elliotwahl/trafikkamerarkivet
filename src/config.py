@@ -36,7 +36,10 @@ KAMERA_JSON = Path(os.environ.get("KAMERA_JSON", ROT / "data" / "kameror.json"))
 # Trafikverkets öppna API. demokey står i deras egen testbänk och räcker
 # för att läsa kameralistan; en egen nyckel är gratis men kräver konto.
 TRV_URL = "https://api.trafikinfo.trafikverket.se/v2/data.json"
-TRV_NYCKEL = os.environ.get("TRV_NYCKEL", "demokey")
+# En tom miljövariabel är inte samma sak som en osatt. GitHub Actions skickar
+# tom sträng för hemligheter som inte finns, och utan `or` hade nyckeln blivit
+# tom i stället för demokey — vilket ger 401 från Trafikverket.
+TRV_NYCKEL = os.environ.get("TRV_NYCKEL") or "demokey"
 
 # Vilka kameror. Trafikverket har två sorter: "Trafikflödeskamera" (1280x720,
 # ~110 KB) och "Väglagskamera" (~2 MP, ~340 KB, uppdateras var 5:e minut).
@@ -46,7 +49,7 @@ TYPER = [t.strip() for t in os.environ.get("TYPER", "Trafikflödeskamera").split
 LAN = [n.strip() for n in os.environ.get("LAN", "").split(",") if n.strip()]
 
 # Bildvariant: fullsize (1280x720), medium (385x217) eller thumbnail (180x101).
-VARIANT = os.environ.get("VARIANT", "fullsize")
+VARIANT = os.environ.get("VARIANT") or "fullsize"
 
 # Rullande arkiv: rensa dygn äldre än så här många dagar. 0 = spara allt.
 RETENTION_DAGAR = int(os.environ.get("RETENTION_DAGAR", "0"))
@@ -63,7 +66,7 @@ MIN_LEDIGT_GB = float(os.environ.get("MIN_LEDIGT_GB", "5"))
 
 # Komprimering: kodek och kvalitet för dygnsvideorna. AV1 crf 32 mätt till
 # ~17 KB/ruta mot JPEG:ens 110 KB, utan synlig skillnad på en trafikbild.
-KODEK = os.environ.get("KODEK", "av1")            # av1 | h265 | h264
+KODEK = os.environ.get("KODEK") or "av1"            # av1 | h265 | h264
 CRF = os.environ.get("CRF", "")                   # tom = kodekens standard
 
 # Trafikverket ber om att få veta vem som hämtar. Sätt KONTAKT till en

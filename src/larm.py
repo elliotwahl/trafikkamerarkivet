@@ -32,7 +32,7 @@ def hjartslag(suffix="", data=""):
         )
         with urllib.request.urlopen(req, timeout=15) as r:
             return 200 <= r.status < 300
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
+    except Exception as e:  # noqa: BLE001 — samma sak här
         print(f"[hjärtslag gick inte fram: {e}]")
         return False
 
@@ -57,6 +57,6 @@ def skicka(text, tyst=False):
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status == 200
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        print(f"[larm gick inte fram: {e}] {text}")
+    except Exception as e:  # noqa: BLE001 — ett larm som kraschar får aldrig
+        print(f"[larm gick inte fram: {e}] {text}")  # fälla jobbet det larmar om
         return False
