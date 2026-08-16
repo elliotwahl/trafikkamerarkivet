@@ -21,7 +21,6 @@ import collections
 import io
 import json
 import shutil
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -31,11 +30,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import compact
 import config
 import ia
 import larm
 import r2
+import video
 
 RA = "ra"
 KLART = "klart"
@@ -88,31 +87,13 @@ def packa_upp(nycklar, katalog):
 
 
 def koda(katalog, kamera, rader, ut):
-    """Rutorna för en kamera till en AV1-video. Returnerar antal rutor."""
+    """Rutorna för en kamera till en video. Returnerar antal kodade rutor."""
     filer = [katalog / r["fil"] for r in rader]
     filer = [f for f in filer if f.exists()]
-    if len(filer) < 2:
-        return 0
-    lista = katalog / ".rutor.txt"
-    lista.write_text("".join(f"file '{f}'\nduration 1\n" for f in filer), encoding="utf-8")
-    encoder, crf_standard, extra = compact.KODEKAR[config.KODEK]
-    kord = subprocess.run([
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-f", "concat", "-safe", "0", "-i", str(lista),
-        "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,"
-               "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1",
-        "-c:v", encoder, "-crf", config.CRF or crf_standard,
-        "-pix_fmt", "yuv420p", "-r", "1", "-movflags", "+faststart",
-        *extra, str(ut),
-    ], capture_output=True, text=True)
-    lista.unlink(missing_ok=True)
-    if kord.returncode != 0:
-        print(f"  ! {kamera}: ffmpeg: {kord.stderr.strip()[:200]}")
-        return 0
-    # Lita aldrig på att videon blev rätt — räkna rutorna i den.
-    if compact.ffprobe_antal(ut) != len(filer):
-        print(f"  ! {kamera}: fel antal rutor i videon, behåller råmaterialet")
-        ut.unlink(missing_ok=True)
+    ok, fel = video.koda(filer, ut, config.KODEK, config.CRF)
+    if not ok:
+        if fel != "färre än två rutor":
+            print(f"  ! {kamera}: {fel}")
         return 0
     return len(filer)
 
@@ -224,7 +205,11 @@ def ladda_upp_klart():
                 kvar += 1
                 break  # strypt eller nere — sluta banka på
 
-        # Radera bara det archive.org självt räknar upp.
+        # Radera bara det archive.org självt räknar upp. Deras metadata-API
+        # släpar ofta en minut efter en uppladdning, så det som just skickats
+        # syns sällan direkt — då ligger det kvar och städas nästa körning.
+        # Att vänta in dem här hade bara gjort jobbet långsammare.
+        time.sleep(5)
         uppe = ia.filer_i_item(dygn)
         if uppe:
             for nyckel in nycklar:
@@ -264,7 +249,9 @@ def main(argv):
 
     print("\nfas 2: laddar upp till archive.org")
     uppladdade, kvar = ladda_upp_klart()
-    print(f"  {uppladdade} filer uppladdade, {kvar} kvar i bufferten")
+    ovantar = len(r2.lista(f"{KLART}/"))
+    print(f"  {uppladdade} filer uppladdade, {kvar} misslyckade, "
+          f"{ovantar} ligger kvar i bufferten i väntan på verifiering")
 
     _, byte = r2.anvandning()
     r2.skriv(STATUS, json.dumps({

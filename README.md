@@ -119,25 +119,47 @@ Två saker som visade sig spela roll, och en som inte gjorde det:
 
 ## Köra själv
 
-Kräver Python 3 och `ffmpeg`/`ffprobe`. Inga andra beroenden.
+Kräver Python 3 och `ffmpeg`/`ffprobe`. Inga andra beroenden — signeringen mot
+objektlagret är skriven med stdlib, för ett jobb som ska rulla i åratal mår bra
+av att inte ha någon dependency som kan ruttna.
 
 ```sh
-python3 src/collect.py              # ett svep
-python3 src/compact.py              # packa gårdagens rutor
-python3 src/compact.py --behall     # samma, utan att radera JPEG-rutorna
-python3 src/upload.py --rensa       # ladda upp till archive.org, städa lokalt
-python3 src/prune.py --kor          # rensa dygn äldre än RETENTION_DAGAR
+python3 src/sweep.py               # ett svep
+python3 src/pack.py                # komprimera avslutade perioder + ladda upp
+python3 src/pack.py --tvinga       # även perioder som inte tagit slut
+python3 src/pack.py --bara-upp     # bara beta av uppladdningskön
+python3 src/status.py              # skriv STATUS.md
 
-BEGRANSA=12 python3 src/collect.py  # smoke test mot 12 kameror
+BEGRANSA=12 python3 src/sweep.py   # smoke test mot 12 kameror
+LAN=1 python3 src/sweep.py         # bara Stockholms län
 ```
 
-För uppladdning behövs ett nyckelpar från
-[archive.org/account/s3.php](https://archive.org/account/s3.php) i `.env`:
+Nycklar läses ur `.env` (som är gitignorerad) eller ur miljön. I drift ligger
+de som GitHub Secrets — `scripts/lagg-in-secrets.sh` lyfter över dem.
 
 ```
-IA_ACCESS=...
-IA_SECRET=...
+IA_ACCESS=            # archive.org/account/s3.php
+IA_SECRET=
+R2_ACCOUNT_ID=        # Cloudflare R2, Object Read & Write
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=
 ```
+
+## Nödbroms
+
+```sh
+./scripts/nodbroms.sh            # stoppa allt
+./scripts/nodbroms.sh --slapp    # starta igen
+./scripts/nodbroms.sh --status   # visa läget
+```
+
+Den skriver en `status/STOPP`-fil i objektlagret och stänger av schemana.
+Svep och packning kollar filen allra först och gör ingenting om den finns.
+
+Filen ligger i lagret och inte i koden med flit: den går att skapa från
+Cloudflares webbgränssnitt på tio sekunder, utan git, utan GitHub, utan att
+något deployas. Det är den broms som fungerar när allt annat krånglar.
 
 ## Inställningar
 
@@ -145,16 +167,17 @@ Allt styrs med miljövariabler.
 
 | variabel | standard | |
 |---|---|---|
-| `ARKIV_DIR` | `data/arkiv` | var rutorna mellanlagras |
 | `TYPER` | `Trafikflödeskamera` | lägg till `,Väglagskamera` för hela beståndet |
-| `LAN` | alla | länsnummer, t.ex. `1` för Stockholm, `1,14` för Stockholm och Västra Götaland |
+| `LAN` | alla | länsnummer, t.ex. `1` för Stockholm, `1,14` med Västra Götaland |
 | `VARIANT` | `fullsize` | `fullsize` · `medium` · `thumbnail` |
 | `PARALLELLA` | `8` | samtidiga nedladdningar |
-| `MIN_LEDIGT_GB` | `5` | svepet avbryter hellre än fyller disken |
 | `KODEK` / `CRF` | `av1` / `32` | `av1` · `h265` · `h264` |
-| `RETENTION_DAGAR` | `0` | `0` = spara allt, annars rullande arkiv |
+| `TAK_GB` | `8` | svepet slutar skriva över det här — gratisnivån är 10 GB |
+| `VARNA_GB` | `5` | larma när bufferten passerar |
 | `TRV_NYCKEL` | `demokey` | egen nyckel om demokey stryps |
 | `KONTAKT` | – | mejladress i User-Agent |
+| `HJARTSLAG_URL` | – | dödmansknapp, t.ex. healthchecks.io |
+| `TELEGRAM_TOKEN` / `TELEGRAM_CHAT_ID` | – | larm |
 
 ## Två regler i koden
 
@@ -207,8 +230,15 @@ enskild felkälla för hela arkivet.
 | En uppladdning misslyckas | Bufferten behålls, nästa packning gör om den. Perioder söks upp genom att de ligger kvar, inte genom att räknas ut — en missad körning tas igen av sig själv. |
 | En video blev fel | `ffprobe` räknar rutorna i den färdiga filen. Stämmer inte antalet raderas inget. |
 | Trafikverket svarar tomt | Tre försök. Ett tomt svar får aldrig tolkas som "det finns inga kameror". |
+| Bufferten växer okontrollerat | Larm vid 5 GB, och vid 8 GB slutar svepet skriva. Hellre ett stillastående arkiv än en oväntad räkning. |
 | **Hela insamlingen tystnar** | Ett jobb som inte kör kan inte larma om sig självt. Därför pingar svepet en extern dödmansknapp (`HJARTSLAG_URL`) — uteblir pingen larmar den tjänsten. |
 | GitHub stänger av schemat | `status.py` committar en gång om dygnet, vilket håller repot aktivt. |
+
+En regel går före alla andra: **ingenting raderas på ett antagande.** Råa rutor
+tas bort först när videorna ligger i objektlagret, och videorna först när
+archive.org självt räknar upp dem i sitt metadata-API. Det API:t släpar ofta en
+minut efter en uppladdning, så det som just skickats ligger normalt kvar en
+körning extra. Det är avsiktligt.
 
 ## Status
 

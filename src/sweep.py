@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config
-import collect
+import hamta
 import larm
 import r2
 import trv
@@ -106,7 +106,7 @@ def svep():
 
     with tarfile.open(fileobj=bunt, mode="w") as tar:
         with ThreadPoolExecutor(config.PARALLELLA) as pool:
-            for kam, data, felmed in pool.map(collect.hamta_en, nya):
+            for kam, data, felmed in pool.map(hamta.en, nya):
                 if felmed:
                     fel += 1
                     continue
@@ -118,7 +118,7 @@ def svep():
                     tidigare[kam["Id"]] = {"t": kam["PhotoTime"], "sha": sha}
                     continue
 
-                ts = collect.parsa_tid(kam["PhotoTime"])
+                ts = hamta.parsa_tid(kam["PhotoTime"])
                 namn = f"{kam['Id']}/{ts:%Y%m%dT%H%M%S}Z.jpg"
                 info = tarfile.TarInfo(namn)
                 info.size = len(data)
