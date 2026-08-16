@@ -1,12 +1,17 @@
 name: Svep
 
-# Var 15:e minut. GitHubs schema glider och hoppar ibland över helt, därför
-# kan vakten också trigga jobbet via workflow_dispatch. Att sveparna blir
-# ojämnt fördelade gör inget: vi sparar Trafikverkets egen PhotoTime, inte
-# när vi råkade fråga.
+# Begär var 5:e minut för att få ut var 15:e.
+#
+# GitHub prioriterar ner täta scheman. Uppmätt över ett dygn gav "*/15" i
+# praktiken ett svep var 38:e minut, med glapp upp till 65. Att begära var
+# 5:e är inte ett försök att köra oftare än vi behöver — det är vad som
+# krävs för att landa nära den takt vi faktiskt vill ha.
+#
+# Ojämna mellanrum gör inget för arkivet: vi sparar Trafikverkets egen
+# PhotoTime, inte när vi råkade fråga.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 # Två svep samtidigt skulle hämta samma bilder två gånger. Köa i stället för
