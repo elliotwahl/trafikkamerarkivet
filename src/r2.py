@@ -158,6 +158,23 @@ def lista(prefix="", max_nycklar=1000):
     return nycklar
 
 
+STOPP = "status/STOPP"
+
+
+def stoppad():
+    """Nödbroms. Finns objektet status/STOPP i bucketen slutar allt skriva.
+
+    Den ligger i bufferten och inte i koden av ett skäl: den går att slå på
+    från Cloudflares webbgränssnitt på tio sekunder, utan git, utan GitHub,
+    utan att något behöver deployas. Det är den broms som fungerar även när
+    allt annat krånglar.
+    """
+    try:
+        return finns(STOPP)
+    except Exception:  # noqa: BLE001 — kan vi inte fråga, kör vidare
+        return False
+
+
 def anvandning(prefix=""):
     """(antal objekt, totala bytes) — för att hålla koll på 10 GB-gränsen."""
     antal = byte = 0

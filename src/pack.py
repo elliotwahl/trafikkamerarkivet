@@ -237,6 +237,10 @@ def ladda_upp_klart():
 
 def main(argv):
     nu = datetime.now(timezone.utc)
+
+    if r2.stoppad():
+        print("nödbromsen är i (status/STOPP finns i bufferten) — gör ingenting")
+        return 0
     tvinga = "--tvinga" in argv       # packa även perioder som inte tagit slut
     bara_upp = "--bara-upp" in argv   # hoppa över komprimeringen
 
@@ -272,7 +276,7 @@ def main(argv):
     if misslyckade:
         larm.skicka(f"⚠️ {misslyckade} period(er) kunde inte komprimeras. "
                     f"Råmaterialet ligger kvar.")
-    if kvar and byte / 1e9 > 5:
+    if kvar and byte / 1e9 > config.VARNA_GB:
         larm.skicka(f"⚠️ {kvar} filer väntar på archive.org och bufferten är "
                     f"uppe i {byte/1e9:.1f} GB av gratisnivåns 10.")
     return 1 if misslyckade and not klara else 0

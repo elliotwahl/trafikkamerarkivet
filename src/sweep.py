@@ -33,8 +33,6 @@ HJARTSLAG = "status/senaste-svep.json"
 KAMEROR = "status/kameror.json"
 RA = "ra"
 
-# Larma om bufferten börjar närma sig R2:s gratisnivå på 10 GB.
-BUFFERT_VARNING_GB = 6.0
 
 
 def las_state():
@@ -71,6 +69,23 @@ def uppdatera_kameralista(nu):
 def svep():
     t0 = time.time()
     nu = datetime.now(timezone.utc)
+
+    if r2.stoppad():
+        print("nödbromsen är i (status/STOPP finns i bufferten) — gör ingenting")
+        return 0
+
+    # Kolla taket innan vi hämtar 85 MB som ändå inte får skrivas.
+    antal_f, byte_f = r2.anvandning()
+    if byte_f / 1e9 > config.TAK_GB:
+        print(f"AVBRYTER: bufferten är {byte_f/1e9:.1f} GB, taket är "
+              f"{config.TAK_GB} GB. Inget skrivs förrän den tömts.")
+        larm.skicka(
+            f"🛑 <b>Svepet stoppat.</b> Bufferten är {byte_f/1e9:.1f} GB och "
+            f"taket {config.TAK_GB} GB (gratisnivån är 10). Insamlingen står "
+            f"still tills packningen fått undan kön till archive.org.\n\n"
+            f"Hellre ett stillastående arkiv än en oväntad räkning."
+        )
+        return 1
 
     try:
         uppdatera_kameralista(nu)
@@ -140,7 +155,7 @@ def svep():
     # Bufferten ska tömmas var sjätte timme. Växer den ändå har antingen
     # komprimeringen eller uppladdningen slutat fungera, och då är det bråttom
     # innan gratisnivån tar slut.
-    if byte / 1e9 > BUFFERT_VARNING_GB:
+    if byte / 1e9 > config.VARNA_GB:
         larm.skicka(
             f"⚠️ Bufferten är uppe i {byte/1e9:.1f} GB i {antal} objekt. "
             f"R2:s gratisnivå är 10 GB — komprimeringen eller uppladdningen "

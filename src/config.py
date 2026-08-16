@@ -64,6 +64,12 @@ FORSOK = int(os.environ.get("FORSOK", "3"))
 # Stoppa svepet om disken börjar ta slut, hellre än att fylla den.
 MIN_LEDIGT_GB = float(os.environ.get("MIN_LEDIGT_GB", "5"))
 
+# Hårt tak för bufferten, i GB. Passeras det slutar svepet skriva — hellre
+# ett stillastående arkiv än en oväntad räkning. R2:s gratisnivå är 10 GB,
+# och taket ligger under den med marginal för att hinna larma i tid.
+TAK_GB = float(os.environ.get("TAK_GB", "8"))
+VARNA_GB = float(os.environ.get("VARNA_GB", "5"))
+
 # Komprimering: kodek och kvalitet för dygnsvideorna. AV1 crf 32 mätt till
 # ~17 KB/ruta mot JPEG:ens 110 KB, utan synlig skillnad på en trafikbild.
 KODEK = os.environ.get("KODEK") or "av1"            # av1 | h265 | h264
