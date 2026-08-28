@@ -111,18 +111,32 @@ def komprimera_period(dygn, period, nycklar, kameraregister):
         index = {}
         kameror = rutor_totalt = bytes_ut = 0
         for kamera, rader in sorted(rutor.items()):
-            filnamn = f"{kamera}-{period:02d}.mp4"
-            ut = arbete / filnamn
-            n = koda(arbete, kamera, rader, ut)
-            if not n:
+            befintliga = [r for r in rader if (arbete / r["fil"]).exists()]
+            if not befintliga:
                 continue
-            data = ut.read_bytes()
-            r2.skriv(f"{KLART}/{dygn}/{filnamn}", data, "video/mp4")
+
+            # En video kräver minst två rutor. Blir svepen så glesa att en
+            # period bara innehåller en bild per kamera sparas den som JPEG
+            # i stället — hellre en ensam bild i arkivet än ingen alls.
+            if len(befintliga) == 1:
+                filnamn = f"{kamera}-{period:02d}.jpg"
+                data = (arbete / befintliga[0]["fil"]).read_bytes()
+                r2.skriv(f"{KLART}/{dygn}/{filnamn}", data, "image/jpeg")
+                n = 1
+            else:
+                filnamn = f"{kamera}-{period:02d}.mp4"
+                ut = arbete / filnamn
+                n = koda(arbete, kamera, befintliga, ut)
+                if not n:
+                    continue
+                data = ut.read_bytes()
+                r2.skriv(f"{KLART}/{dygn}/{filnamn}", data, "video/mp4")
+                ut.unlink(missing_ok=True)
 
             # Rutlistan ligger per kamera, inte samlad. En viewer som vill visa
             # en kamera ska hämta en liten fil — inte 7 MB rutor för 786 andra.
             rutor_ut = [{"i": i, "t": r["t"], "b": r["b"], "sha256": r["sha256"]}
-                        for i, r in enumerate(rader) if (arbete / r["fil"]).exists()]
+                        for i, r in enumerate(befintliga)]
             r2.skriv(f"{KLART}/{dygn}/{kamera}-{period:02d}.json",
                      json.dumps({"kamera": kamera, "dygn": dygn, "period": period,
                                  "video": filnamn, "fps": 1, "rutor": rutor_ut},
@@ -145,7 +159,6 @@ def komprimera_period(dygn, period, nycklar, kameraregister):
             kameror += 1
             rutor_totalt += n
             bytes_ut += len(data)
-            ut.unlink(missing_ok=True)
 
         if not index:
             print("  inga kameror gick att koda, behåller råmaterialet")
@@ -158,7 +171,8 @@ def komprimera_period(dygn, period, nycklar, kameraregister):
                  "application/json")
 
         # Råmaterialet raderas först när videorna faktiskt ligger i bufferten.
-        saknas = [k for k in index if not r2.finns(f"{KLART}/{dygn}/{k}-{period:02d}.mp4")]
+        saknas = [k for k, v in index.items()
+                  if not r2.finns(f"{KLART}/{dygn}/{v['video']}")]
         if saknas:
             print(f"  ! {len(saknas)} videor kom inte fram till bufferten, "
                   f"behåller råmaterialet")
