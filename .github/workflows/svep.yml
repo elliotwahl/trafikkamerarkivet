@@ -1,17 +1,21 @@
 name: Svep
 
-# Begär var 5:e minut för att få ut var 15:e.
+# Var 20:e minut, och det är medvetet blygsamt.
 #
-# GitHub prioriterar ner täta scheman. Uppmätt över ett dygn gav "*/15" i
-# praktiken ett svep var 38:e minut, med glapp upp till 65. Att begära var
-# 5:e är inte ett försök att köra oftare än vi behöver — det är vad som
-# krävs för att landa nära den takt vi faktiskt vill ha.
+# Historik, uppmätt: "*/15" gav i praktiken ett svep var 38:e minut. Jag
+# ändrade då till "*/5" i tron att man kompenserar strypning genom att be om
+# mer. Motsatsen hände — GitHub trappade ner oss progressivt, från 45 minuter
+# till 11 timmar mellan sveparna på tre dygn, tills insamlingen i praktiken
+# stod still.
+#
+# Att be om mindre är det enda som kan låta strypningen släppa. Ett schema
+# som faktiskt körs slår ett tätare som ignoreras.
 #
 # Ojämna mellanrum gör inget för arkivet: vi sparar Trafikverkets egen
 # PhotoTime, inte när vi råkade fråga.
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/20 * * * *"
   workflow_dispatch:
 
 # Två svep samtidigt skulle hämta samma bilder två gånger. Köa i stället för
