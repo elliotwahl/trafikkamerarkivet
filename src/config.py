@@ -70,6 +70,10 @@ MIN_LEDIGT_GB = float(os.environ.get("MIN_LEDIGT_GB", "5"))
 TAK_GB = float(os.environ.get("TAK_GB", "8"))
 VARNA_GB = float(os.environ.get("VARNA_GB", "5"))
 
+# Hur många minuter in i en packning som nya uppladdningar får börja. Ska
+# ligga gott under timeout-minutes i packa.yml, se BUDGET_S i pack.py.
+PACKA_BUDGET_MIN = float(os.environ.get("PACKA_BUDGET_MIN", "270"))
+
 # Komprimering. H.264 är inte minst — AV1 är 40 % mindre vid samma kvalitet —
 # men det är det enda formatet som spelas upp av varje webbläsare och varje
 # enhet. Apple har ingen mjukvaruavkodare för AV1, så allt äldre än iPhone

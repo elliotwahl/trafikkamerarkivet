@@ -42,6 +42,15 @@ KLART = "klart"
 STATUS = "status/senaste-packning.json"
 PERIODER = (0, 6, 12, 18)
 
+# Hur länge körningen får börja nya uppladdningar, räknat från start.
+# Workflowet dödas efter 330 minuter, och en enda långsam fil kan ta elva
+# (två försök à 300 s plus minutpausen i ia._begar). Utan gräns hann
+# uppladdningen ibland inte klart, jobbet avbröts mitt i och varken
+# städning eller status skrevs — elva gånger sep–okt 2026. Det som inte
+# hinns med ligger kvar i klart/ och nästa körning tar det.
+BUDGET_S = config.PACKA_BUDGET_MIN * 60
+START = time.monotonic()
+
 
 # ---------------------------------------------------------------- fas 1
 
@@ -205,7 +214,10 @@ def ladda_upp_klart():
         return 0, 0
 
     uppladdade = kvar = 0
+    slut_pa_tid = False
     for dygn in sorted(per_dygn):
+        if slut_pa_tid:
+            break
         nycklar = sorted(per_dygn[dygn])
         redan = ia.filer_i_item(dygn)
         if redan is None:
@@ -220,6 +232,11 @@ def ladda_upp_klart():
             if filnamn in redan:
                 r2.radera(nyckel)
                 continue
+            if time.monotonic() - START > BUDGET_S:
+                print(f"  tidsbudgeten ({BUDGET_S/60:.0f} min) är slut, "
+                      f"resten tar nästa körning")
+                slut_pa_tid = True
+                break
             data = r2.las(nyckel)
             if data is None:
                 continue

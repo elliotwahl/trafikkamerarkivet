@@ -41,4 +41,6 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           KONTAKT: ${{ secrets.KONTAKT }}
-        run: python3 src/pack.py
+        # -u: utan den buffrar Python allt till slutet, och ett jobb som
+        # avbryts lämnar en helt tom logg.
+        run: python3 -u src/pack.py
