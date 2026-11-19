@@ -1,18 +1,18 @@
 # Status
 
-Uppdaterad 2026-11-18 14:32 UTC.
+Uppdaterad 2026-11-19 14:40 UTC.
 
-**Senaste svep:** ⚠️ för 169 minuter sedan (2026-11-18T11:42 UTC)
+**Senaste svep:** ⚠️ för 314 minuter sedan (2026-11-19T09:25 UTC)
 
 | | |
 |---|---|
-| Kameror | 808 |
-| Nya bilder i svepet | 808 |
+| Kameror | 810 |
+| Nya bilder i svepet | 810 |
 | Oförändrade | 0 |
 | Fel | 0 |
-| Buffert | 0.16 GB i 2 objekt |
+| Buffert | 0.17 GB i 2 objekt |
 
-**Senaste packning:** för 6 timmar sedan — 2 perioder klara, 0 misslyckade.
+**Senaste packning:** för 7 timmar sedan — 2 perioder klara, 0 misslyckade.
 
 ## Arkivet
 
@@ -21,11 +21,10 @@ Ett item per dygn på archive.org. Varje kamera har en video per sextimmarsperio
 | dygn | filer | |
 |---|---|---|
 | 2026-11-16 | 11 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-16) |
-| 2026-11-15 | 688 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-15) |
-| 2026-11-14 | 1847 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-14) |
-| 2026-11-13 | 4074 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-13) |
+| 2026-11-15 | 1413 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-15) |
+| 2026-11-14 | 2611 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-14) |
+| 2026-11-13 | 6483 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-13) |
 | 2026-11-12 | 6459 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-12) |
-| 2026-11-11 | 4852 | [archive.org](https://archive.org/details/trafikkamerarkivet-2026-11-11) |
 
 ---
 
